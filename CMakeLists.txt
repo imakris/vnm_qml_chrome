@@ -67,6 +67,24 @@ endif()
 if(VNM_QML_CHROME_BUILD_TESTS)
     include(CTest)
     find_package(Qt6 REQUIRED COMPONENTS Test)
+    find_package(Qt6Gui REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
+
+    if(WIN32)
+        set(vnm_qml_chrome_qt_runtime_path
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>$ENV{PATH}")
+    elseif(APPLE)
+        set(vnm_qml_chrome_qt_runtime_path
+            "DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:Qt6::Core>:$ENV{DYLD_LIBRARY_PATH}")
+    else()
+        set(vnm_qml_chrome_qt_runtime_path
+            "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:Qt6::Core>:$ENV{LD_LIBRARY_PATH}")
+    endif()
+
+    set(vnm_qml_chrome_qt_test_environment
+        "QT_QPA_PLATFORM=offscreen"
+        "QT_QPA_PLATFORM_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>"
+        "QT_QUICK_CONTROLS_STYLE=Basic"
+    )
 
     add_executable(vnm_chrome_contract_tests
         tests/vnm_chrome_contract_tests.cpp
@@ -86,7 +104,8 @@ if(VNM_QML_CHROME_BUILD_TESTS)
         add_test(
             NAME vnm_chrome_contract_tests
             COMMAND ${CMAKE_COMMAND} -E env
-                "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+                ${vnm_qml_chrome_qt_test_environment}
+                "${vnm_qml_chrome_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_chrome_contract_tests>"
         )
     endif()
