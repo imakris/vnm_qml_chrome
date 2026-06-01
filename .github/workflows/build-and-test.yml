@@ -61,3 +61,26 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_CONTROLS_STYLE: Basic
         run: ctest -C Release --output-on-failure
+
+  freebsd:
+    name: FreeBSD 15.0 / system Qt
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and test
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.0"
+          usesh: true
+          prepare: |
+            pkg update -f
+            pkg install -y cmake ninja pkgconf qt6-base qt6-declarative qt6-shadertools
+          run: |
+            cmake -S . -B build -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DVNM_QML_CHROME_BUILD_TESTS=ON \
+              -DVNM_QML_CHROME_BUILD_EXAMPLES=ON
+            cmake --build build --config Release
+            env QT_QPA_PLATFORM=offscreen QT_QUICK_CONTROLS_STYLE=Basic ctest --test-dir build --output-on-failure
