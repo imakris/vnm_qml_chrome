@@ -1,0 +1,13 @@
+build*/
+.qt/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+DartConfiguration.tcl
+Testing/
+*.exe
+*.ilk
+*.lib
+*.obj
+*.pdb

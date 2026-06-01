@@ -1,0 +1,15 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/qmldir">qml/qmldir</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeTheme.qml">qml/VNM_ChromeTheme.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_AnimatedMark.qml">qml/VNM_AnimatedMark.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeWindowButton.qml">qml/VNM_ChromeWindowButton.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_TitleBarRoundButton.qml">qml/VNM_TitleBarRoundButton.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_DarkModeTitleButton.qml">qml/VNM_DarkModeTitleButton.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_LanguageTitleButton.qml">qml/VNM_LanguageTitleButton.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeResizeArea.qml">qml/VNM_ChromeResizeArea.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeBottomResizeLayer.qml">qml/VNM_ChromeBottomResizeLayer.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeSideResizeLayer.qml">qml/VNM_ChromeSideResizeLayer.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeTitleBar.qml">qml/VNM_ChromeTitleBar.qml</file>
+  </qresource>
+</RCC>
