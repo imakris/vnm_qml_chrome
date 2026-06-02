@@ -239,6 +239,7 @@ Item {
             "titlebar_button_pressed",
             "titlebar_close_hover",
             "titlebar_close_pressed",
+            "titlebar_activity_marker",
             "titlebar_content_border",
             "window_frame_border",
             "round_button_background",
@@ -333,6 +334,7 @@ Item {
             "resize_enabled",
             "resize_border_width",
             "animated_mark_visible",
+            "activity_marker_text",
             "leading_action_component",
             "trailing_action_component",
         };
@@ -397,6 +399,56 @@ Item {
         QVERIFY(custom_theme->setProperty("titlebar", QColor(QStringLiteral("#405060"))));
         QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
         QCOMPARE(object_color(titlebar, "color"), QColor(QStringLiteral("#405060")));
+    }
+
+    void titlebar_activity_marker_is_optional_and_themeable()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 500
+    height: 60
+
+    VNM_ChromeTheme {
+        id: custom_theme
+        titlebar_activity_marker: "#112233"
+    }
+
+    VNM_ChromeTitleBar {
+        objectName: "chrome_titlebar"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        theme: custom_theme
+        title: "Build"
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/titlebar_activity_marker_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QObject* titlebar = find_descendant(root.get(), QStringLiteral("chrome_titlebar"));
+        QVERIFY(titlebar != nullptr);
+        auto* marker_label = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("activity_marker_label")));
+        QVERIFY(marker_label != nullptr);
+        QVERIFY(!marker_label->isVisible());
+
+        const QString marker_text(QChar(0x2731));
+        QVERIFY(titlebar->setProperty("activity_marker_text", marker_text));
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QVERIFY(marker_label->isVisible());
+        QCOMPARE(marker_label->property("text").toString(), marker_text);
+        QCOMPARE(object_color(marker_label, "color"), QColor(QStringLiteral("#112233")));
     }
 
     void titlebar_title_has_margin_after_mark_without_actions()

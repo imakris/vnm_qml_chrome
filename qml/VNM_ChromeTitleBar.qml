@@ -13,6 +13,7 @@ Rectangle {
     property bool resize_enabled: true
     property int resize_border_width: 6
     property bool animated_mark_visible: true
+    property string activity_marker_text: ""
     property Component leading_action_component: null
     property Component trailing_action_component: null
     readonly property real content_border_width: 1
@@ -104,6 +105,24 @@ Rectangle {
             Layout.rightMargin: titlebar.animated_mark_visible ? 8 : 0
             onMove_requested: titlebar.move_requested()
             onMaximize_toggle_requested: titlebar.maximize_toggle_requested()
+        }
+
+        Label {
+            id: activity_marker_label
+            objectName: "activity_marker_label"
+
+            readonly property bool marker_visible: titlebar.activity_marker_text.length > 0
+
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredWidth: marker_visible ? 18 : 0
+            Layout.rightMargin: marker_visible ? 6 : 0
+            visible: marker_visible
+            text: titlebar.activity_marker_text
+            color: titlebar.theme.titlebar_activity_marker
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            font.pointSize: 9.5
         }
 
         Loader {

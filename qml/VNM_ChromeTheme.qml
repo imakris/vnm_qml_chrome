@@ -10,6 +10,7 @@ QtObject {
     property color titlebar_button_pressed: "#4b4c4f"
     property color titlebar_close_hover: "#c42b1c"
     property color titlebar_close_pressed: "#9f2116"
+    property color titlebar_activity_marker: "#71b4ff"
     property color titlebar_content_border: "#35363a"
     property color window_frame_border: "#35363a"
     property color round_button_background: "#3d3d3d"
