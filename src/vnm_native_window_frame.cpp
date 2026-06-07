@@ -4,9 +4,12 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
+
+#ifdef Q_OS_WIN
 #include <mutex>
 #endif
 
@@ -197,11 +200,15 @@ qreal VNM_NativeWindowFrame::frame_width() const
 
 void VNM_NativeWindowFrame::set_frame_width(qreal frame_width)
 {
-    if (qFuzzyCompare(m_frame_width, frame_width)) {
+    const qreal normalized_frame_width = std::isfinite(frame_width)
+        ? std::max<qreal>(0.0, frame_width)
+        : 0.0;
+
+    if (qFuzzyCompare(m_frame_width + 1.0, normalized_frame_width + 1.0)) {
         return;
     }
 
-    m_frame_width = frame_width;
+    m_frame_width = normalized_frame_width;
     emit frame_width_changed();
     update_native_frame();
 }
@@ -268,6 +275,7 @@ bool VNM_NativeWindowFrame::should_use_native_frame() const
         && m_window->isVisible()
         && m_frame_visible
         && m_frame_width > 0.0
+        && m_frame_color.isValid()
         && m_frame_color.alpha() == 255;
 }
 

@@ -39,9 +39,11 @@ target_sources(vnm_qml_chrome PRIVATE
     include/vnm_qml_chrome/vnm_chrome_geometry.h
     include/vnm_qml_chrome/vnm_qml_chrome_runtime.h
     include/vnm_qml_chrome/vnm_native_window_frame.h
+    include/vnm_qml_chrome/vnm_system_window.h
     src/vnm_chrome_geometry.cpp
     src/vnm_native_window_frame.cpp
     src/vnm_qml_chrome_runtime.cpp
+    src/vnm_system_window.cpp
     vnm_qml_chrome.qrc
 )
 
@@ -89,6 +91,7 @@ if(VNM_QML_CHROME_BUILD_TESTS)
     )
 
     add_executable(vnm_chrome_contract_tests
+        examples/solid_window/solid_window.qrc
         tests/vnm_chrome_contract_tests.cpp
     )
 

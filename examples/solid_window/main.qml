@@ -72,7 +72,8 @@ Window {
         anchors.fill: parent
         resize_enabled: root.visibility === Window.Windowed
         resize_border_width: 6
-        onResize_requested: (edges) => root.startSystemResize(edges)
+        onResize_requested: (edges) =>
+            VNM_system_window.start_system_resize(root, edges)
     }
 
     VNM_ChromeBottomResizeLayer {
@@ -82,7 +83,8 @@ Window {
         height: 6
         resize_enabled: root.visibility === Window.Windowed
         resize_border_width: 6
-        onResize_requested: (edges) => root.startSystemResize(edges)
+        onResize_requested: (edges) =>
+            VNM_system_window.start_system_resize(root, edges)
     }
 
     Item {
@@ -106,8 +108,9 @@ Window {
             resize_border_width: 6
             theme: chrome_theme
 
-            onMove_requested: root.startSystemMove()
-            onResize_requested: (edges) => root.startSystemResize(edges)
+            onMove_requested: VNM_system_window.start_system_move(root)
+            onResize_requested: (edges) =>
+                VNM_system_window.start_system_resize(root, edges)
             onMinimize_requested: root.showMinimized()
             onMaximize_toggle_requested: root.toggle_window_maximized()
             onClose_requested: root.close()

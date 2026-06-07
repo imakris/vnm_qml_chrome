@@ -12,6 +12,16 @@
 #include <array>
 #endif
 
+/**
+ * @brief Optional native border controller for frameless QWindow instances.
+ *
+ * On Windows, the controller draws a four-edge child-window border only while
+ * the attached window is visible, frame_visible is true, frame_width is
+ * positive, and frame_color is valid and fully opaque. On other platforms, or
+ * when those conditions are not met, active remains false so callers can use
+ * their QML fallback frame. Window-state policy remains with the caller:
+ * fullscreen, maximized, or other state rules must be encoded in frame_visible.
+ */
 class VNM_NativeWindowFrame : public QObject
 {
     Q_OBJECT
@@ -37,6 +47,9 @@ public:
     QColor frame_color() const;
     void set_frame_color(const QColor& frame_color);
 
+    /**
+     * @brief Return whether the native platform border is currently drawing.
+     */
     bool active() const;
 
 signals:

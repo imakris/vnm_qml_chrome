@@ -1,10 +1,10 @@
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
 
 #include "vnm_qml_chrome/vnm_chrome_geometry.h"
+#include "vnm_qml_chrome/vnm_native_window_frame.h"
 
 #include <QColor>
 #include <QGuiApplication>
-#include <QMetaMethod>
 #include <QPointF>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -233,6 +233,113 @@ Item {
             "rect_snapped",
             Q_RETURN_ARG(QVariant, rect_snapped)));
         QVERIFY(rect_snapped.toBool());
+    }
+
+    void system_window_singleton_exposes_qwindow_wrapper_contract()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import QtQuick.Window
+import VNM_Chrome
+
+Window {
+    function null_move_returns_false() {
+        return VNM_system_window.start_system_move(null)
+    }
+
+    function null_resize_returns_false() {
+        return VNM_system_window.start_system_resize(null, Qt.LeftEdge)
+    }
+
+    function invalid_resize_edges_return_false() {
+        return !VNM_system_window.start_system_resize(this, 0)
+            && !VNM_system_window.start_system_resize(
+                this,
+                Qt.LeftEdge | Qt.RightEdge)
+            && !VNM_system_window.start_system_resize(
+                this,
+                Qt.TopEdge | Qt.BottomEdge)
+            && !VNM_system_window.start_system_resize(
+                this,
+                Qt.LeftEdge | Qt.RightEdge | Qt.TopEdge | Qt.BottomEdge)
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/system_window_singleton_contract.qml");
+        QVERIFY(root != nullptr);
+
+        QVariant move_result;
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "null_move_returns_false",
+            Q_RETURN_ARG(QVariant, move_result)));
+        QCOMPARE(move_result.toBool(), false);
+
+        QVariant resize_result;
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "null_resize_returns_false",
+            Q_RETURN_ARG(QVariant, resize_result)));
+        QCOMPARE(resize_result.toBool(), false);
+
+        QVariant invalid_resize_result;
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "invalid_resize_edges_return_false",
+            Q_RETURN_ARG(QVariant, invalid_resize_result)));
+        QVERIFY(invalid_resize_result.toBool());
+    }
+
+    void native_frame_normalizes_invalid_frame_width()
+    {
+        VNM_NativeWindowFrame frame;
+
+        frame.set_frame_width(2.5);
+        QCOMPARE(frame.frame_width(), 2.5);
+
+        frame.set_frame_width(-2.0);
+        QCOMPARE(frame.frame_width(), 0.0);
+
+        frame.set_frame_width(std::numeric_limits<qreal>::infinity());
+        QCOMPARE(frame.frame_width(), 0.0);
+
+        frame.set_frame_width(std::numeric_limits<qreal>::quiet_NaN());
+        QCOMPARE(frame.frame_width(), 0.0);
+    }
+
+    void native_frame_invalid_or_transparent_color_stays_inactive()
+    {
+        VNM_NativeWindowFrame frame;
+
+        frame.set_frame_color(QColor());
+        QVERIFY(!frame.frame_color().isValid());
+        QCOMPARE(frame.active(), false);
+
+        frame.set_frame_color(QColor(18, 52, 86, 120));
+        QCOMPARE(frame.frame_color(), QColor(18, 52, 86, 120));
+        QCOMPARE(frame.active(), false);
+    }
+
+    void solid_window_example_loads_with_registered_runtime()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        QQmlComponent component(
+            &engine,
+            QUrl(QStringLiteral("qrc:/examples/solid_window/main.qml")));
+        if (!component.isReady()) {
+            qWarning().noquote() << component_error_string(component);
+        }
+        QVERIFY(component.isReady());
+
+        std::unique_ptr<QObject> root(component.create());
+        QVERIFY(root != nullptr);
     }
 
     void runtime_bootstrap_registers_manual_qrc_import()
@@ -610,6 +717,11 @@ Item {
         QVERIFY(root != nullptr);
         root->ensurePolished();
         QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* titlebar = qobject_cast<QQuickItem*>(
+            find_descendant(root_object.get(), QStringLiteral("chrome_titlebar")));
+        QVERIFY(titlebar != nullptr);
+        QVERIFY(nearly_equal(titlebar->property("content_border_width").toReal(), 0.8));
 
         auto* mark = qobject_cast<QQuickItem*>(
             find_descendant(root_object.get(), QStringLiteral("vnm_animated_mark")));

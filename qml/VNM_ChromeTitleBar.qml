@@ -22,7 +22,8 @@ Rectangle {
         VNM_chrome_geometry.snapped_logical_edge(
             resize_border_width,
             device_pixel_ratio)
-    readonly property real content_border_width: 1
+    readonly property real content_border_width:
+        1 / VNM_chrome_geometry.normalized_device_pixel_ratio(device_pixel_ratio)
     readonly property int move_drag_threshold: 2
 
     signal move_requested()
