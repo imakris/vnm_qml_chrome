@@ -5,7 +5,7 @@ Item {
     objectName: "bottom_resize_layer"
 
     property bool resize_enabled: true
-    property int resize_border_width: 6
+    property real resize_border_width: 6
 
     signal resize_requested(int edges)
 

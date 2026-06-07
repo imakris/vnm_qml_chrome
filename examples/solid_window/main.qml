@@ -12,6 +12,9 @@ Window {
     title: "VNM Chrome Example"
     color: "#1b1d20"
 
+    readonly property real device_pixel_ratio: root.screen
+        ? root.screen.devicePixelRatio
+        : 1
     readonly property real frame_width: 1
     readonly property color frame_border: chrome_theme.window_frame_border
     readonly property real frame_inset: visibility !== Window.FullScreen
@@ -20,6 +23,13 @@ Window {
             ? frame_width
             : 0
     readonly property real content_inset: native_window_frame.active ? 0 : frame_inset
+    readonly property rect content_rect: VNM_chrome_geometry.snapped_logical_rect(
+        Qt.rect(
+            content_inset,
+            content_inset,
+            Math.max(0, width  - 2 * content_inset),
+            Math.max(0, height - 2 * content_inset)),
+        device_pixel_ratio)
 
     VNM_ChromeTheme {
         id: chrome_theme
@@ -76,8 +86,10 @@ Window {
     }
 
     Item {
-        anchors.fill: parent
-        anchors.margins: root.content_inset
+        x: root.content_rect.x
+        y: root.content_rect.y
+        width: root.content_rect.width
+        height: root.content_rect.height
         clip: true
 
         VNM_ChromeTitleBar {

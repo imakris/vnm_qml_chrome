@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 Rectangle {
     id: titlebar
@@ -11,11 +12,16 @@ Rectangle {
     property bool active: true
     property bool maximized: false
     property bool resize_enabled: true
-    property int resize_border_width: 6
+    property real resize_border_width: 6
+    property real device_pixel_ratio: Screen.devicePixelRatio
     property bool animated_mark_visible: true
     property string activity_marker_text: ""
     property Component leading_action_component: null
     property Component trailing_action_component: null
+    readonly property real snapped_resize_border_width:
+        VNM_chrome_geometry.snapped_logical_edge(
+            resize_border_width,
+            device_pixel_ratio)
     readonly property real content_border_width: 1
     readonly property int move_drag_threshold: 2
 
@@ -44,7 +50,6 @@ Rectangle {
 
     height: 32
     color: theme.titlebar
-    opacity: active ? 1.0 : 0.82
     z: 40
 
     MouseArea {
@@ -86,7 +91,7 @@ Rectangle {
         id: content_layout
 
         anchors.fill: parent
-        anchors.leftMargin: 6
+        anchors.leftMargin: titlebar.snapped_resize_border_width
         spacing: 0
         z: 2
 
@@ -298,11 +303,11 @@ Rectangle {
     VNM_ChromeResizeArea {
         objectName: "top_resize_area"
         anchors.left: parent.left
-        anchors.leftMargin: titlebar.resize_border_width
+        anchors.leftMargin: titlebar.snapped_resize_border_width
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.rightMargin: titlebar_buttons.width
-        height: titlebar.resize_border_width
+        height: titlebar.snapped_resize_border_width
         enabled: titlebar.resize_enabled
         edges: Qt.TopEdge
         cursorShape: Qt.SizeVerCursor
@@ -315,8 +320,8 @@ Rectangle {
         objectName: "top_left_resize_area"
         anchors.left: parent.left
         anchors.top: parent.top
-        width: titlebar.resize_border_width
-        height: titlebar.resize_border_width
+        width: titlebar.snapped_resize_border_width
+        height: titlebar.snapped_resize_border_width
         enabled: titlebar.resize_enabled
         edges: Qt.LeftEdge | Qt.TopEdge
         cursorShape: Qt.SizeFDiagCursor
@@ -329,8 +334,8 @@ Rectangle {
         objectName: "top_right_resize_area"
         anchors.right: parent.right
         anchors.top: parent.top
-        width: titlebar.resize_border_width
-        height: titlebar.resize_border_width
+        width: titlebar.snapped_resize_border_width
+        height: titlebar.snapped_resize_border_width
         enabled: titlebar.resize_enabled
         edges: Qt.RightEdge | Qt.TopEdge
         cursorShape: Qt.SizeBDiagCursor

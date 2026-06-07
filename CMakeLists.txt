@@ -36,8 +36,10 @@ add_library(vnm_qml_chrome STATIC)
 add_library(vnm_qml_chrome::vnm_qml_chrome ALIAS vnm_qml_chrome)
 
 target_sources(vnm_qml_chrome PRIVATE
+    include/vnm_qml_chrome/vnm_chrome_geometry.h
     include/vnm_qml_chrome/vnm_qml_chrome_runtime.h
     include/vnm_qml_chrome/vnm_native_window_frame.h
+    src/vnm_chrome_geometry.cpp
     src/vnm_native_window_frame.cpp
     src/vnm_qml_chrome_runtime.cpp
     vnm_qml_chrome.qrc

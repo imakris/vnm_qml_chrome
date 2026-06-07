@@ -1,8 +1,10 @@
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
 
+#include "vnm_qml_chrome/vnm_chrome_geometry.h"
 #include "vnm_qml_chrome/vnm_native_window_frame.h"
 
 #include <QDebug>
+#include <QJSEngine>
 #include <QQmlEngine>
 #include <QResource>
 #include <QString>
@@ -33,6 +35,14 @@ void ensure_qrc_initialized()
 void ensure_qml_types_registered()
 {
     std::call_once(s_qml_type_registration_flag, [] {
+        qmlRegisterSingletonType<vnm_qml_chrome::Chrome_geometry>(
+            "VNM_Chrome",
+            1,
+            0,
+            "VNM_chrome_geometry",
+            [](QQmlEngine*, QJSEngine*) -> QObject* {
+                return new vnm_qml_chrome::Chrome_geometry;
+            });
         qmlRegisterType<VNM_NativeWindowFrame>(
             "VNM_Chrome",
             1,

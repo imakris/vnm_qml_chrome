@@ -1,8 +1,11 @@
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
 
+#include "vnm_qml_chrome/vnm_chrome_geometry.h"
+
 #include <QColor>
 #include <QGuiApplication>
 #include <QMetaMethod>
+#include <QPointF>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -11,6 +14,8 @@
 #include <QString>
 #include <QtTest/QTest>
 
+#include <cmath>
+#include <limits>
 #include <memory>
 
 namespace {
@@ -96,6 +101,22 @@ QColor object_color(QObject* object, const char* property_name)
     return object->property(property_name).value<QColor>();
 }
 
+bool nearly_equal(qreal actual, qreal expected)
+{
+    return std::abs(actual - expected) <= 0.000001;
+}
+
+bool rect_nearly_equal(
+    const QRectF& actual,
+    const QRectF& expected)
+{
+    return
+        nearly_equal(actual.x(),      expected.x())      &&
+        nearly_equal(actual.y(),      expected.y())      &&
+        nearly_equal(actual.width(),  expected.width())  &&
+        nearly_equal(actual.height(), expected.height());
+}
+
 } // namespace
 
 class Vnm_chrome_contract_tests : public QObject
@@ -103,6 +124,117 @@ class Vnm_chrome_contract_tests : public QObject
     Q_OBJECT
 
 private slots:
+    void geometry_helpers_normalize_invalid_dpr()
+    {
+        using vnm_qml_chrome::normalized_device_pixel_ratio;
+
+        QCOMPARE(normalized_device_pixel_ratio(1.25), 1.25);
+        QCOMPARE(normalized_device_pixel_ratio(0.0),  1.0);
+        QCOMPARE(normalized_device_pixel_ratio(-2.0), 1.0);
+        QCOMPARE(
+            normalized_device_pixel_ratio(std::numeric_limits<qreal>::infinity()),
+            1.0);
+        QCOMPARE(
+            normalized_device_pixel_ratio(std::numeric_limits<qreal>::quiet_NaN()),
+            1.0);
+    }
+
+    void geometry_helpers_snap_custom_frame_rect_to_physical_pixels()
+    {
+        using vnm_qml_chrome::rect_has_snapped_physical_edges;
+        using vnm_qml_chrome::snapped_logical_edge;
+        using vnm_qml_chrome::snapped_logical_rect;
+
+        constexpr qreal dpr                  = 1.25;
+        constexpr qreal resize_border_width  = 6.0;
+        constexpr qreal titlebar_height      = 32.0;
+        constexpr qreal content_border_width = 1.0 / dpr;
+
+        const QRectF unsnapped_terminal_rect(
+            resize_border_width + content_border_width,
+            titlebar_height     + content_border_width,
+            1894.4,
+            1040.4);
+
+        QVERIFY(!rect_has_snapped_physical_edges(unsnapped_terminal_rect, dpr));
+        QVERIFY(nearly_equal(snapped_logical_edge(6.8, dpr), 7.2));
+
+        const QRectF snapped_terminal_rect = snapped_logical_rect(
+            unsnapped_terminal_rect,
+            dpr);
+        const QRectF expected_terminal_rect(7.2, 32.8, 1894.4, 1040.8);
+
+        QVERIFY(rect_has_snapped_physical_edges(snapped_terminal_rect, dpr));
+        QVERIFY2(
+            rect_nearly_equal(snapped_terminal_rect, expected_terminal_rect),
+            "Custom-frame terminal content must snap off the half physical pixel.");
+    }
+
+    void geometry_singleton_exposes_snapping_contract()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    function snapped_edge() {
+        return VNM_chrome_geometry.snapped_logical_edge(6.8, 1.25)
+    }
+
+    function snapped_rect() {
+        return VNM_chrome_geometry.snapped_logical_rect(
+            Qt.rect(6.8, 32.8, 1894.4, 1040.4),
+            1.25)
+    }
+
+    function invalid_dpr() {
+        return VNM_chrome_geometry.normalized_device_pixel_ratio(0)
+    }
+
+    function rect_snapped() {
+        return VNM_chrome_geometry.rect_has_snapped_physical_edges(snapped_rect(), 1.25)
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/geometry_singleton_contract.qml");
+        QVERIFY(root != nullptr);
+
+        QVariant snapped_edge;
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "snapped_edge",
+            Q_RETURN_ARG(QVariant, snapped_edge)));
+        QVERIFY(nearly_equal(snapped_edge.toReal(), 7.2));
+
+        QVariant snapped_rect;
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "snapped_rect",
+            Q_RETURN_ARG(QVariant, snapped_rect)));
+        QVERIFY(rect_nearly_equal(
+            snapped_rect.toRectF(),
+            QRectF(7.2, 32.8, 1894.4, 1040.8)));
+
+        QVariant invalid_dpr;
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "invalid_dpr",
+            Q_RETURN_ARG(QVariant, invalid_dpr)));
+        QCOMPARE(invalid_dpr.toReal(), 1.0);
+
+        QVariant rect_snapped;
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "rect_snapped",
+            Q_RETURN_ARG(QVariant, rect_snapped)));
+        QVERIFY(rect_snapped.toBool());
+    }
+
     void runtime_bootstrap_registers_manual_qrc_import()
     {
         QQmlEngine engine;
@@ -333,6 +465,7 @@ Item {
             "maximized",
             "resize_enabled",
             "resize_border_width",
+            "device_pixel_ratio",
             "animated_mark_visible",
             "activity_marker_text",
             "leading_action_component",
@@ -399,6 +532,169 @@ Item {
         QVERIFY(custom_theme->setProperty("titlebar", QColor(QStringLiteral("#405060"))));
         QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
         QCOMPARE(object_color(titlebar, "color"), QColor(QStringLiteral("#405060")));
+    }
+
+    void inactive_titlebar_does_not_dim_child_opacity()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 500
+    height: 60
+
+    VNM_ChromeTitleBar {
+        objectName: "chrome_titlebar"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        active: false
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/inactive_titlebar_opacity_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* titlebar = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("chrome_titlebar")));
+        QVERIFY(titlebar != nullptr);
+        QCOMPARE(titlebar->opacity(), 1.0);
+
+        auto* mark = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("vnm_animated_mark")));
+        QVERIFY(mark != nullptr);
+        QCOMPARE(mark->opacity(), 1.0);
+
+        auto* title_label = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("title_label")));
+        QVERIFY(title_label != nullptr);
+        QCOMPARE(title_label->opacity(), 1.0);
+    }
+
+    void titlebar_snaps_content_inset_at_fractional_dpr()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 500
+    height: 60
+
+    VNM_ChromeTitleBar {
+        objectName: "chrome_titlebar"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 32
+        resize_border_width: 6
+        device_pixel_ratio: 1.25
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root_object = create_qml_object(
+            engine, qml_source, "qrc:/tests/titlebar_fractional_dpr_contract.qml");
+        QVERIFY(root_object != nullptr);
+        auto* root = qobject_cast<QQuickItem*>(root_object.get());
+        QVERIFY(root != nullptr);
+        root->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* mark = qobject_cast<QQuickItem*>(
+            find_descendant(root_object.get(), QStringLiteral("vnm_animated_mark")));
+        QVERIFY(mark != nullptr);
+        const QPointF mark_origin = mark->mapToItem(root, QPointF(0.0, 0.0));
+        QVERIFY(nearly_equal(mark_origin.x(), 6.4));
+        QVERIFY(vnm_qml_chrome::rect_has_snapped_physical_edges(
+            QRectF(mark_origin.x(), 0.0, mark->width(), 0.0),
+            1.25));
+
+        auto* top_left_resize_area = qobject_cast<QQuickItem*>(
+            find_descendant(root_object.get(), QStringLiteral("top_left_resize_area")));
+        QVERIFY(top_left_resize_area != nullptr);
+        QVERIFY(nearly_equal(top_left_resize_area->width(),  6.4));
+        QVERIFY(nearly_equal(top_left_resize_area->height(), 6.4));
+    }
+
+    void resize_layers_preserve_fractional_resize_border_widths()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 240
+    height: 140
+
+    VNM_ChromeSideResizeLayer {
+        objectName: "side_layer"
+        anchors.fill: parent
+        resize_border_width: 5.6
+    }
+
+    VNM_ChromeBottomResizeLayer {
+        objectName: "bottom_layer"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: resize_border_width
+        resize_border_width: 5.6
+    }
+
+    VNM_ChromeTitleBar {
+        objectName: "chrome_titlebar"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 32
+        resize_border_width: 5.6
+        device_pixel_ratio: 1.25
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root_object = create_qml_object(
+            engine,
+            qml_source,
+            "qrc:/tests/fractional_resize_border_width_contract.qml");
+        QVERIFY(root_object != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* left_resize_area = qobject_cast<QQuickItem*>(
+            find_descendant(root_object.get(), QStringLiteral("left_resize_area")));
+        QVERIFY(left_resize_area != nullptr);
+        QVERIFY(nearly_equal(left_resize_area->width(), 5.6));
+
+        auto* bottom_layer = qobject_cast<QQuickItem*>(
+            find_descendant(root_object.get(), QStringLiteral("bottom_layer")));
+        QVERIFY(bottom_layer != nullptr);
+        QVERIFY(nearly_equal(bottom_layer->height(), 5.6));
+
+        auto* bottom_left_resize_area = qobject_cast<QQuickItem*>(
+            find_descendant(root_object.get(), QStringLiteral("bottom_left_resize_area")));
+        QVERIFY(bottom_left_resize_area != nullptr);
+        QVERIFY(nearly_equal(bottom_left_resize_area->width(),  5.6));
+        QVERIFY(nearly_equal(bottom_left_resize_area->height(), 5.6));
+
+        auto* top_left_resize_area = qobject_cast<QQuickItem*>(
+            find_descendant(root_object.get(), QStringLiteral("top_left_resize_area")));
+        QVERIFY(top_left_resize_area != nullptr);
+        QVERIFY(nearly_equal(top_left_resize_area->width(),  5.6));
+        QVERIFY(nearly_equal(top_left_resize_area->height(), 5.6));
     }
 
     void titlebar_activity_marker_is_optional_and_themeable()

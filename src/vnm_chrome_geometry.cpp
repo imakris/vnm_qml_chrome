@@ -1,0 +1,98 @@
+#include "vnm_qml_chrome/vnm_chrome_geometry.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace {
+
+constexpr qreal k_snap_epsilon = 0.000001;
+
+} // namespace
+
+namespace vnm_qml_chrome {
+
+qreal normalized_device_pixel_ratio(qreal device_pixel_ratio)
+{
+    return
+        std::isfinite(device_pixel_ratio) && device_pixel_ratio > 0.0
+            ? device_pixel_ratio
+            : 1.0;
+}
+
+qreal snapped_logical_edge(
+    qreal logical_edge,
+    qreal device_pixel_ratio)
+{
+    const qreal dpr = normalized_device_pixel_ratio(device_pixel_ratio);
+    return std::round(logical_edge * dpr) / dpr;
+}
+
+QRectF snapped_logical_rect(
+    const QRectF& logical_rect,
+    qreal         device_pixel_ratio)
+{
+    const qreal left   = snapped_logical_edge(logical_rect.left(),   device_pixel_ratio);
+    const qreal top    = snapped_logical_edge(logical_rect.top(),    device_pixel_ratio);
+    const qreal right  = snapped_logical_edge(logical_rect.right(),  device_pixel_ratio);
+    const qreal bottom = snapped_logical_edge(logical_rect.bottom(), device_pixel_ratio);
+
+    return QRectF(
+        left,
+        top,
+        std::max<qreal>(0.0, right - left),
+        std::max<qreal>(0.0, bottom - top));
+}
+
+bool rect_has_snapped_physical_edges(
+    const QRectF& logical_rect,
+    qreal         device_pixel_ratio)
+{
+    const qreal dpr = normalized_device_pixel_ratio(device_pixel_ratio);
+    const auto edge_is_snapped = [dpr](qreal logical_edge) {
+        const qreal physical_edge = logical_edge * dpr;
+        return std::abs(physical_edge - std::round(physical_edge)) <= k_snap_epsilon;
+    };
+
+    return
+        edge_is_snapped(logical_rect.left())   &&
+        edge_is_snapped(logical_rect.top())    &&
+        edge_is_snapped(logical_rect.right())  &&
+        edge_is_snapped(logical_rect.bottom());
+}
+
+} // namespace vnm_qml_chrome
+
+vnm_qml_chrome::Chrome_geometry::Chrome_geometry(QObject* parent)
+:
+    QObject(parent)
+{
+}
+
+qreal vnm_qml_chrome::Chrome_geometry::normalized_device_pixel_ratio(
+    qreal device_pixel_ratio) const
+{
+    return vnm_qml_chrome::normalized_device_pixel_ratio(device_pixel_ratio);
+}
+
+qreal vnm_qml_chrome::Chrome_geometry::snapped_logical_edge(
+    qreal logical_edge,
+    qreal device_pixel_ratio) const
+{
+    return vnm_qml_chrome::snapped_logical_edge(logical_edge, device_pixel_ratio);
+}
+
+QRectF vnm_qml_chrome::Chrome_geometry::snapped_logical_rect(
+    const QRectF& logical_rect,
+    qreal         device_pixel_ratio) const
+{
+    return vnm_qml_chrome::snapped_logical_rect(logical_rect, device_pixel_ratio);
+}
+
+bool vnm_qml_chrome::Chrome_geometry::rect_has_snapped_physical_edges(
+    const QRectF& logical_rect,
+    qreal         device_pixel_ratio) const
+{
+    return vnm_qml_chrome::rect_has_snapped_physical_edges(
+        logical_rect,
+        device_pixel_ratio);
+}
