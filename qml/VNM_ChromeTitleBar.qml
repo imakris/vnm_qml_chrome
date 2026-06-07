@@ -116,7 +116,13 @@ Rectangle {
             id: activity_marker_label
             objectName: "activity_marker_label"
 
-            readonly property bool marker_visible: titlebar.activity_marker_text.length > 0
+            property bool marker_visible: false
+
+            function retain_marker_placeholder_if_needed() {
+                if (text.length > 0) {
+                    marker_visible = true
+                }
+            }
 
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredWidth: marker_visible ? 18 : 0
@@ -128,6 +134,9 @@ Rectangle {
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             font.pointSize: 9.5
+
+            Component.onCompleted: retain_marker_placeholder_if_needed()
+            onTextChanged: retain_marker_placeholder_if_needed()
         }
 
         Loader {

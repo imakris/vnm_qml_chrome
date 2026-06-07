@@ -729,6 +729,8 @@ Item {
         std::unique_ptr<QObject> root = create_qml_object(
             engine, qml_source, "qrc:/tests/titlebar_activity_marker_contract.qml");
         QVERIFY(root != nullptr);
+        auto* root_item = qobject_cast<QQuickItem*>(root.get());
+        QVERIFY(root_item != nullptr);
         QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
 
         QObject* titlebar = find_descendant(root.get(), QStringLiteral("chrome_titlebar"));
@@ -736,15 +738,28 @@ Item {
         auto* marker_label = qobject_cast<QQuickItem*>(
             find_descendant(root.get(), QStringLiteral("activity_marker_label")));
         QVERIFY(marker_label != nullptr);
+        auto* title_label = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("title_label")));
+        QVERIFY(title_label != nullptr);
         QVERIFY(!marker_label->isVisible());
 
         const QString marker_text(QChar(0x2731));
         QVERIFY(titlebar->setProperty("activity_marker_text", marker_text));
+        root_item->ensurePolished();
         QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
 
         QVERIFY(marker_label->isVisible());
         QCOMPARE(marker_label->property("text").toString(), marker_text);
         QCOMPARE(object_color(marker_label, "color"), QColor(QStringLiteral("#112233")));
+        const qreal title_x_with_marker = title_label->x();
+
+        QVERIFY(titlebar->setProperty("activity_marker_text", QString()));
+        root_item->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QVERIFY(marker_label->isVisible());
+        QCOMPARE(marker_label->property("text").toString(), QString());
+        QVERIFY(nearly_equal(title_label->x(), title_x_with_marker));
     }
 
     void titlebar_title_has_margin_after_mark_without_actions()
