@@ -874,6 +874,67 @@ Item {
         QVERIFY(nearly_equal(title_label->x(), title_x_with_marker));
     }
 
+    void titlebar_window_buttons_are_individually_optional()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 500
+    height: 60
+
+    VNM_ChromeTitleBar {
+        objectName: "chrome_titlebar"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        title: "Dialog"
+        minimize_button_visible: false
+        maximize_button_visible: false
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/titlebar_window_buttons_contract.qml");
+        QVERIFY(root != nullptr);
+        auto* root_item = qobject_cast<QQuickItem*>(root.get());
+        QVERIFY(root_item != nullptr);
+        root_item->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QObject* titlebar = find_descendant(root.get(), QStringLiteral("chrome_titlebar"));
+        QVERIFY(titlebar != nullptr);
+
+        auto* minimize_button = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("minimize_button")));
+        auto* maximize_button = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("maximize_button")));
+        auto* close_button = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("close_button")));
+        auto* button_row = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("titlebar_buttons")));
+        QVERIFY(minimize_button != nullptr);
+        QVERIFY(maximize_button != nullptr);
+        QVERIFY(close_button != nullptr);
+        QVERIFY(button_row != nullptr);
+
+        QVERIFY(!minimize_button->isVisible());
+        QVERIFY(!maximize_button->isVisible());
+        QVERIFY(close_button->isVisible());
+        QVERIFY(nearly_equal(button_row->width(), 46.0));
+
+        // The buttons react to the property, so re-showing one restores it.
+        QVERIFY(titlebar->setProperty("minimize_button_visible", true));
+        root_item->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        QVERIFY(minimize_button->isVisible());
+    }
+
     void titlebar_title_has_margin_after_mark_without_actions()
     {
         QQmlEngine engine;

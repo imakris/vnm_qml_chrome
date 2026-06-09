@@ -18,6 +18,9 @@ Rectangle {
     property string activity_marker_text: ""
     property Component leading_action_component: null
     property Component trailing_action_component: null
+    property bool minimize_button_visible: true
+    property bool maximize_button_visible: true
+    property bool close_button_visible: true
     readonly property real snapped_resize_border_width:
         VNM_chrome_geometry.snapped_logical_edge(
             resize_border_width,
@@ -81,7 +84,7 @@ Rectangle {
         onCanceled: system_move_started = false
 
         onDoubleClicked: (mouse) => {
-            if (mouse.button === Qt.LeftButton) {
+            if (mouse.button === Qt.LeftButton && titlebar.maximize_button_visible) {
                 titlebar.maximize_toggle_requested()
                 mouse.accepted = true
             }
@@ -178,7 +181,9 @@ Rectangle {
             id: titlebar_buttons
             objectName: "titlebar_buttons"
 
-            Layout.preferredWidth: 138
+            Layout.preferredWidth: (titlebar.minimize_button_visible ? 46 : 0)
+                + (titlebar.maximize_button_visible ? 46 : 0)
+                + (titlebar.close_button_visible ? 46 : 0)
             Layout.fillHeight: true
             spacing: 0
 
@@ -186,8 +191,9 @@ Rectangle {
                 id: minimize_button
                 objectName: "minimize_button"
 
+                visible: titlebar.minimize_button_visible
                 theme: titlebar.theme
-                Layout.preferredWidth: 46
+                Layout.preferredWidth: visible ? 46 : 0
                 Layout.fillHeight: true
                 onClicked: titlebar.minimize_requested()
 
@@ -221,8 +227,9 @@ Rectangle {
                 id: maximize_button
                 objectName: "maximize_button"
 
+                visible: titlebar.maximize_button_visible
                 theme: titlebar.theme
-                Layout.preferredWidth: 46
+                Layout.preferredWidth: visible ? 46 : 0
                 Layout.fillHeight: true
                 onClicked: titlebar.maximize_toggle_requested()
 
@@ -263,10 +270,11 @@ Rectangle {
                 id: close_button
                 objectName: "close_button"
 
+                visible: titlebar.close_button_visible
                 theme: titlebar.theme
                 hover_color: titlebar.theme.titlebar_close_hover
                 pressed_color: titlebar.theme.titlebar_close_pressed
-                Layout.preferredWidth: 46
+                Layout.preferredWidth: visible ? 46 : 0
                 Layout.fillHeight: true
                 onClicked: titlebar.close_requested()
 
