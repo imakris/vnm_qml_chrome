@@ -18,6 +18,17 @@ Rectangle {
     property string activity_marker_text: ""
     property Component leading_action_component: null
     property Component trailing_action_component: null
+    // Declarative custom buttons rendered as peers of the window controls
+    // (to their left, in list order). Each entry is a plain object:
+    //   {
+    //     object_name?: string,
+    //     glyph?: string, font_family?: string, pixel_size?: real,  // font icon
+    //     svg?: url,                                                 // or svg icon
+    //     width?: real, tooltip?: string, hover_color?: color,
+    //     action?: function,
+    //   }
+    // A font glyph follows the titlebar theme colour; an svg is drawn as-is.
+    property var custom_buttons: []
     property bool minimize_button_visible: true
     property bool maximize_button_visible: true
     property bool close_button_visible: true
@@ -177,6 +188,71 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
         }
 
+        Row {
+            id: custom_buttons_row
+            objectName: "custom_buttons_row"
+
+            Layout.fillHeight: true
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 0
+
+            Repeater {
+                model: titlebar.custom_buttons
+
+                delegate: VNM_ChromeWindowButton {
+                    id: custom_button
+                    required property var modelData
+
+                    objectName: (modelData.object_name !== undefined)
+                        ? modelData.object_name
+                        : ""
+                    theme: titlebar.theme
+                    hover_color: (modelData.hover_color !== undefined)
+                        ? modelData.hover_color
+                        : titlebar.theme.titlebar_button_hover
+                    width: (modelData.width !== undefined) ? modelData.width : 46
+                    height: titlebar.height
+
+                    ToolTip.text: (modelData.tooltip !== undefined) ? modelData.tooltip : ""
+                    ToolTip.delay: 500
+                    ToolTip.visible: hovered && ToolTip.text.length > 0
+
+                    onClicked: {
+                        if (typeof modelData.action === "function") {
+                            modelData.action()
+                        }
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        visible: (modelData.glyph !== undefined) && (modelData.glyph.length > 0)
+                        text: visible ? modelData.glyph : ""
+                        color: titlebar.theme.titlebar_button_icon
+                        font.family: (modelData.font_family !== undefined)
+                            ? modelData.font_family
+                            : Qt.application.font.family
+                        font.pixelSize: (modelData.pixel_size !== undefined)
+                            ? modelData.pixel_size
+                            : 14
+                    }
+
+                    Image {
+                        anchors.centerIn: parent
+                        visible: (modelData.svg !== undefined) && (String(modelData.svg).length > 0)
+                        source: visible ? modelData.svg : ""
+                        sourceSize.width: (modelData.pixel_size !== undefined)
+                            ? modelData.pixel_size
+                            : 16
+                        sourceSize.height: (modelData.pixel_size !== undefined)
+                            ? modelData.pixel_size
+                            : 16
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                    }
+                }
+            }
+        }
+
         RowLayout {
             id: titlebar_buttons
             objectName: "titlebar_buttons"
@@ -324,7 +400,7 @@ Rectangle {
         anchors.leftMargin: titlebar.snapped_resize_border_width
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.rightMargin: titlebar_buttons.width
+        anchors.rightMargin: titlebar_buttons.width + custom_buttons_row.width
         height: titlebar.snapped_resize_border_width
         enabled: titlebar.resize_enabled
         edges: Qt.TopEdge

@@ -935,6 +935,74 @@ Item {
         QVERIFY(minimize_button->isVisible());
     }
 
+    void titlebar_custom_buttons_render_glyph_and_invoke_action()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 500
+    height: 60
+    property int activations: 0
+
+    VNM_ChromeTitleBar {
+        objectName: "chrome_titlebar"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        title: "Custom"
+        custom_buttons: [{
+            object_name: "probe_button",
+            glyph: "A",
+            pixel_size: 14,
+            width: 40,
+            tooltip: "Probe",
+            action: function() { activations += 1 }
+        }]
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/titlebar_custom_buttons_contract.qml");
+        QVERIFY(root != nullptr);
+        auto* root_item = qobject_cast<QQuickItem*>(root.get());
+        QVERIFY(root_item != nullptr);
+        root_item->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QObject* titlebar = find_descendant(root.get(), QStringLiteral("chrome_titlebar"));
+        QVERIFY(titlebar != nullptr);
+        QVERIFY(has_property(titlebar, "custom_buttons"));
+
+        auto* probe = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("probe_button")));
+        QVERIFY(probe != nullptr);
+        QVERIFY(probe->isVisible());
+        QVERIFY(nearly_equal(probe->width(), 40.0));
+        QVERIFY(probe->height() > 0.0);
+
+        // The custom button sits to the left of the window controls, flush.
+        auto* button_row = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("titlebar_buttons")));
+        QVERIFY(button_row != nullptr);
+        const qreal probe_right =
+            probe->mapToItem(root_item, QPointF(probe->width(), 0.0)).x();
+        const qreal buttons_left =
+            button_row->mapToItem(root_item, QPointF(0.0, 0.0)).x();
+        QVERIFY2(nearly_equal(buttons_left - probe_right, 0.0),
+            "Custom button sits flush against the window controls.");
+
+        QCOMPARE(root->property("activations").toInt(), 0);
+        QVERIFY(QMetaObject::invokeMethod(probe, "click"));
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        QCOMPARE(root->property("activations").toInt(), 1);
+    }
+
     void titlebar_title_has_margin_after_mark_without_actions()
     {
         QQmlEngine engine;
