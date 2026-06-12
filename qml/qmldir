@@ -9,4 +9,5 @@ VNM_LanguageTitleButton 1.0 VNM_LanguageTitleButton.qml
 VNM_ChromeResizeArea 1.0 VNM_ChromeResizeArea.qml
 VNM_ChromeBottomResizeLayer 1.0 VNM_ChromeBottomResizeLayer.qml
 VNM_ChromeSideResizeLayer 1.0 VNM_ChromeSideResizeLayer.qml
+VNM_ChromeWindowFrame 1.0 VNM_ChromeWindowFrame.qml
 VNM_ChromeTitleBar 1.0 VNM_ChromeTitleBar.qml

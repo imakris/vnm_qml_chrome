@@ -117,6 +117,11 @@ bool rect_nearly_equal(
         nearly_equal(actual.height(), expected.height());
 }
 
+QRectF item_rect(const QQuickItem& item)
+{
+    return QRectF(item.x(), item.y(), item.width(), item.height());
+}
+
 } // namespace
 
 class Vnm_chrome_contract_tests : public QObject
@@ -442,6 +447,18 @@ Item {
         frame_color: "#123456"
     }
 
+    VNM_ChromeWindowFrame {
+        objectName: "window_frame"
+        x: 250
+        y: 40
+        width: 120
+        height: 80
+        theme: chrome_theme
+        frame_visible: true
+        frame_width: 3
+        top_edge_visible: false
+    }
+
     VNM_ChromeTitleBar {
         objectName: "chrome_titlebar"
         y: 150
@@ -563,6 +580,23 @@ Item {
             QColor(QStringLiteral("#123456")));
         QCOMPARE(native_frame->property("active").toBool(), false);
 
+        QObject* window_frame = find_descendant(root.get(), QStringLiteral("window_frame"));
+        QVERIFY(window_frame != nullptr);
+        QVERIFY(has_property(window_frame, "theme"));
+        QVERIFY(has_property(window_frame, "frame_visible"));
+        QVERIFY(has_property(window_frame, "frame_width"));
+        QVERIFY(has_property(window_frame, "top_edge_visible"));
+        QVERIFY(has_property(window_frame, "bottom_edge_visible"));
+        QVERIFY(has_property(window_frame, "left_edge_visible"));
+        QVERIFY(has_property(window_frame, "right_edge_visible"));
+        QCOMPARE(window_frame->property("frame_visible").toBool(), true);
+        QCOMPARE(window_frame->property("frame_width").toReal(), 3.0);
+        QCOMPARE(window_frame->property("top_edge_visible").toBool(), false);
+        QCOMPARE(window_frame->property("enabled").toBool(), false);
+        auto* window_frame_item = qobject_cast<QQuickItem*>(window_frame);
+        QVERIFY(window_frame_item != nullptr);
+        QCOMPARE(window_frame_item->z(), 1000.0);
+
         QObject* titlebar = find_descendant(root.get(), QStringLiteral("chrome_titlebar"));
         QVERIFY(titlebar != nullptr);
         const char* titlebar_properties[] = {
@@ -575,6 +609,8 @@ Item {
             "device_pixel_ratio",
             "animated_mark_visible",
             "activity_marker_text",
+            "window_frame_top_visible",
+            "window_frame_width",
             "leading_action_component",
             "trailing_action_component",
         };
@@ -586,6 +622,133 @@ Item {
         QVERIFY(has_signal(titlebar, "minimize_requested()"));
         QVERIFY(has_signal(titlebar, "maximize_toggle_requested()"));
         QVERIFY(has_signal(titlebar, "close_requested()"));
+    }
+
+    void window_frame_overlays_edges_without_reserving_space()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 120
+    height: 80
+
+    VNM_ChromeTheme {
+        id: custom_theme
+        window_frame_border: "#445566"
+    }
+
+    VNM_ChromeWindowFrame {
+        objectName: "window_frame"
+        anchors.fill: parent
+        theme: custom_theme
+        frame_width: 3
+        top_edge_visible: false
+        right_edge_visible: false
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/window_frame_overlay_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* frame = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("window_frame")));
+        QVERIFY(frame != nullptr);
+        QCOMPARE(frame->isEnabled(), false);
+        QCOMPARE(frame->z(), 1000.0);
+        QVERIFY(rect_nearly_equal(item_rect(*frame), QRectF(0.0, 0.0, 120.0, 80.0)));
+
+        auto* top = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("chrome_window_frame_top")));
+        auto* bottom = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("chrome_window_frame_bottom")));
+        auto* left = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("chrome_window_frame_left")));
+        auto* right = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("chrome_window_frame_right")));
+        QVERIFY(top    != nullptr);
+        QVERIFY(bottom != nullptr);
+        QVERIFY(left   != nullptr);
+        QVERIFY(right  != nullptr);
+
+        QVERIFY(!top->isVisible());
+        QVERIFY(bottom->isVisible());
+        QVERIFY(left->isVisible());
+        QVERIFY(!right->isVisible());
+        QVERIFY(rect_nearly_equal(item_rect(*top),    QRectF(0.0,   0.0, 120.0, 3.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*bottom), QRectF(0.0,  77.0, 120.0, 3.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*left),   QRectF(0.0,   0.0,   3.0, 80.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*right),  QRectF(117.0, 0.0,   3.0, 80.0)));
+        QCOMPARE(object_color(bottom, "color"), QColor(QStringLiteral("#445566")));
+    }
+
+    void titlebar_window_frame_top_edge_is_opt_in_and_below_content()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 500
+    height: 60
+
+    VNM_ChromeTheme {
+        id: custom_theme
+        window_frame_border: "#556677"
+    }
+
+    VNM_ChromeTitleBar {
+        objectName: "chrome_titlebar"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 32
+        theme: custom_theme
+        window_frame_top_visible: true
+        window_frame_width: 2
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/titlebar_window_frame_top_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* titlebar = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("chrome_titlebar")));
+        QVERIFY(titlebar != nullptr);
+        auto* top = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("titlebar_window_frame_top")));
+        QVERIFY(top != nullptr);
+
+        QVERIFY(top->isVisible());
+        QCOMPARE(top->isEnabled(), false);
+        QCOMPARE(top->z(), 0.0);
+        QVERIFY(rect_nearly_equal(item_rect(*top), QRectF(0.0, 0.0, 500.0, 2.0)));
+        QCOMPARE(object_color(top, "color"), QColor(QStringLiteral("#556677")));
+
+        auto* mark = qobject_cast<QQuickItem*>(
+            find_descendant(root.get(), QStringLiteral("vnm_animated_mark")));
+        QVERIFY(mark != nullptr);
+        QQuickItem* content_layer = mark->parentItem();
+        QVERIFY(content_layer != nullptr);
+        QCOMPARE(content_layer->parentItem(), titlebar);
+        QVERIFY(content_layer->z() > top->z());
+
+        QVERIFY(titlebar->setProperty("window_frame_top_visible", false));
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        QVERIFY(!top->isVisible());
     }
 
     void titlebar_creates_visible_default_mark_and_propagates_theme_override()
@@ -1138,6 +1301,137 @@ Item {
         auto* bottom_corner_owner = bottom_layer->childAt(2, 6);
         QVERIFY(bottom_corner_owner != nullptr);
         QCOMPARE(bottom_corner_owner->objectName(), QStringLiteral("bottom_left_resize_area"));
+    }
+
+    void side_resize_layer_adds_vertical_edges_inside_corner_bands()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 240
+    height: 80
+
+    VNM_ChromeSideResizeLayer {
+        id: side_layer
+        objectName: "side_layer"
+        anchors.fill: parent
+        resize_border_width: 8
+    }
+
+    function top_left_edges() {
+        return side_layer.resize_edges_for_y(Qt.LeftEdge, 2)
+    }
+
+    function middle_left_edges() {
+        return side_layer.resize_edges_for_y(Qt.LeftEdge, 40)
+    }
+
+    function top_right_edges() {
+        return side_layer.resize_edges_for_y(Qt.RightEdge, 2)
+    }
+
+    function bottom_right_edges() {
+        return side_layer.resize_edges_for_y(Qt.RightEdge, 78)
+    }
+
+    function top_left_cursor() {
+        return side_layer.resize_cursor_for_y(Qt.LeftEdge, 2)
+    }
+
+    function middle_left_cursor() {
+        return side_layer.resize_cursor_for_y(Qt.LeftEdge, 40)
+    }
+
+    function bottom_left_cursor() {
+        return side_layer.resize_cursor_for_y(Qt.LeftEdge, 78)
+    }
+
+    function top_right_cursor() {
+        return side_layer.resize_cursor_for_y(Qt.RightEdge, 2)
+    }
+
+    function bottom_right_cursor() {
+        return side_layer.resize_cursor_for_y(Qt.RightEdge, 78)
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/side_resize_corner_band_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QObject* left_resize_area =
+            find_descendant(root.get(), QStringLiteral("left_resize_area"));
+        QVERIFY(left_resize_area != nullptr);
+
+        QVariant value;
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "top_left_edges",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::LeftEdge | Qt::TopEdge));
+
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "middle_left_edges",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::LeftEdge));
+
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "top_right_edges",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::RightEdge | Qt::TopEdge));
+
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "bottom_right_edges",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::RightEdge | Qt::BottomEdge));
+
+        const QVariantMap top_corner_mouse{{QStringLiteral("y"), 2.0}};
+        QVERIFY(QMetaObject::invokeMethod(
+            left_resize_area,
+            "resolved_edges",
+            Q_RETURN_ARG(QVariant, value),
+            Q_ARG(QVariant, QVariant(top_corner_mouse))));
+        QCOMPARE(value.toInt(), int(Qt::LeftEdge | Qt::TopEdge));
+
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "top_left_cursor",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::SizeFDiagCursor));
+
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "middle_left_cursor",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::SizeHorCursor));
+
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "bottom_left_cursor",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::SizeBDiagCursor));
+
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "top_right_cursor",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::SizeBDiagCursor));
+
+        QVERIFY(QMetaObject::invokeMethod(
+            root.get(),
+            "bottom_right_cursor",
+            Q_RETURN_ARG(QVariant, value)));
+        QCOMPARE(value.toInt(), int(Qt::SizeFDiagCursor));
     }
 
     void resize_layers_forward_inner_resize_requests()

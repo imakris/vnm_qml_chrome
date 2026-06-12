@@ -16,6 +16,8 @@ Rectangle {
     property real device_pixel_ratio: Screen.devicePixelRatio
     property bool animated_mark_visible: true
     property string activity_marker_text: ""
+    property bool window_frame_top_visible: false
+    property real window_frame_width: 0
     property Component leading_action_component: null
     property Component trailing_action_component: null
     // Declarative custom buttons rendered as peers of the window controls
@@ -38,6 +40,10 @@ Rectangle {
             device_pixel_ratio)
     readonly property real content_border_width:
         1 / VNM_chrome_geometry.normalized_device_pixel_ratio(device_pixel_ratio)
+    readonly property real window_frame_top_width:
+        isFinite(window_frame_width)
+            ? Math.min(Math.max(0, window_frame_width), height)
+            : 0
     readonly property int move_drag_threshold: 2
 
     signal move_requested()
@@ -66,6 +72,21 @@ Rectangle {
     height: 32
     color: theme.titlebar
     z: 40
+
+    Rectangle {
+        objectName: "titlebar_window_frame_top"
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: titlebar.window_frame_top_width
+        color: titlebar.theme.window_frame_border
+        visible: titlebar.window_frame_top_visible
+            && titlebar.window_frame_top_width > 0
+            && titlebar.theme.window_frame_border.a > 0
+        enabled: false
+        z: 0
+    }
 
     MouseArea {
         id: titlebar_move_area
