@@ -65,7 +65,7 @@ target_link_libraries(vnm_qml_chrome
 
 if(WIN32)
     target_compile_definitions(vnm_qml_chrome PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-    target_link_libraries(vnm_qml_chrome PRIVATE gdi32 user32)
+    target_link_libraries(vnm_qml_chrome PRIVATE dwmapi gdi32 user32)
 endif()
 
 if(VNM_QML_CHROME_BUILD_TESTS)

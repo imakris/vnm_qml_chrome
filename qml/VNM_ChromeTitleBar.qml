@@ -41,8 +41,12 @@ Rectangle {
     readonly property real content_border_width:
         1 / VNM_chrome_geometry.normalized_device_pixel_ratio(device_pixel_ratio)
     readonly property real window_frame_top_width:
-        isFinite(window_frame_width)
-            ? Math.min(Math.max(0, window_frame_width), height)
+        isFinite(window_frame_width) && window_frame_width > 0
+            ? Math.min(
+                VNM_chrome_geometry.snapped_logical_edge(
+                    window_frame_width,
+                    device_pixel_ratio),
+                height)
             : 0
     readonly property int move_drag_threshold: 2
 

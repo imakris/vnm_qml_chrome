@@ -5,10 +5,12 @@
 
 #include <QColor>
 #include <QGuiApplication>
+#include <QImage>
 #include <QPointF>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
+#include <QQuickWindow>
 #include <QResource>
 #include <QSignalSpy>
 #include <QString>
@@ -70,6 +72,11 @@ QObject* find_descendant(QObject* root, const QString& object_name)
     return nullptr;
 }
 
+QQuickItem* find_item(QObject* root, const QString& object_name)
+{
+    return qobject_cast<QQuickItem*>(find_descendant(root, object_name));
+}
+
 std::unique_ptr<QObject> create_qml_object(
     QQmlEngine& engine,
     const char* qml_source,
@@ -120,6 +127,18 @@ bool rect_nearly_equal(
 QRectF item_rect(const QQuickItem& item)
 {
     return QRectF(item.x(), item.y(), item.width(), item.height());
+}
+
+bool color_nearly_equal(
+    const QColor& actual,
+    const QColor& expected)
+{
+    constexpr int k_tolerance = 2;
+    return
+        std::abs(actual.red()   - expected.red())   <= k_tolerance &&
+        std::abs(actual.green() - expected.green()) <= k_tolerance &&
+        std::abs(actual.blue()  - expected.blue())  <= k_tolerance &&
+        std::abs(actual.alpha() - expected.alpha()) <= k_tolerance;
 }
 
 } // namespace
@@ -624,6 +643,617 @@ Item {
         QVERIFY(has_signal(titlebar, "close_requested()"));
     }
 
+    void frame_shell_is_importable_from_qrc_and_exposes_contract()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        const QResource shell_resource(
+            QStringLiteral(":/vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeFrameShell.qml"));
+        QVERIFY(shell_resource.isValid());
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 420
+    height: 160
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        title: "Shell"
+        frame_color: "#102030"
+        frame_outer_edge: 2
+        frame_outer_edge_color: "#203040"
+        frame_gap: 5
+        frame_inner_edge: 3
+        frame_inner_edge_color: "#405060"
+        edge_resize_extent: 11
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/frame_shell_import_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QObject* shell = find_descendant(root.get(), QStringLiteral("frame_shell"));
+        QVERIFY(shell != nullptr);
+
+        const char* shell_properties[] = {
+            "theme",
+            "frame_color",
+            "frame_outer_edge",
+            "frame_outer_edge_color",
+            "frame_gap",
+            "frame_inner_edge",
+            "frame_inner_edge_color",
+            "edge_resize_extent",
+            "device_pixel_ratio",
+            "render_target_physical_width",
+            "render_target_physical_height",
+            "titlebar_height",
+            "resize_enabled",
+            "title",
+            "active",
+            "maximized",
+            "activity_marker_text",
+            "leading_action_component",
+            "trailing_action_component",
+            "custom_buttons",
+            "minimize_button_visible",
+            "maximize_button_visible",
+            "close_button_visible",
+            "titlebar_item",
+            "content_interior_rect",
+            "content_interior_x",
+            "content_interior_y",
+            "content_interior_width",
+            "content_interior_height",
+        };
+        for (const char* property_name : shell_properties) {
+            QVERIFY2(has_property(shell, property_name), property_name);
+        }
+
+        QVERIFY(has_signal(shell, "move_requested()"));
+        QVERIFY(has_signal(shell, "resize_requested(int)"));
+        QVERIFY(has_signal(shell, "minimize_requested()"));
+        QVERIFY(has_signal(shell, "maximize_toggle_requested()"));
+        QVERIFY(has_signal(shell, "close_requested()"));
+
+        QVERIFY(find_descendant(
+            root.get(),
+            QStringLiteral("chrome_frame_shell_titlebar")) != nullptr);
+        QVERIFY(find_descendant(
+            root.get(),
+            QStringLiteral("chrome_frame_shell_content")) != nullptr);
+    }
+
+    void frame_shell_draws_outer_gap_inner_edges_with_independent_colors()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 200
+    height: 120
+
+    VNM_ChromeTheme {
+        id: custom_theme
+        titlebar: "#010203"
+        window_frame_border: "#111111"
+    }
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        theme: custom_theme
+        titlebar_height: 32
+        device_pixel_ratio: 1
+        frame_color: "#102030"
+        frame_outer_edge: 2
+        frame_outer_edge_color: "#203040"
+        frame_gap: 5
+        frame_inner_edge: 3
+        frame_inner_edge_color: "#405060"
+        edge_resize_extent: 11
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/frame_shell_edges_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* shell = find_item(root.get(), QStringLiteral("frame_shell"));
+        QVERIFY(shell != nullptr);
+
+        auto* fill = find_item(root.get(), QStringLiteral("chrome_frame_shell_frame_fill"));
+        QVERIFY(fill != nullptr);
+        QCOMPARE(object_color(fill, "color"), QColor(QStringLiteral("#102030")));
+        auto* fill_top = find_item(root.get(), QStringLiteral("chrome_frame_shell_frame_fill_top"));
+        auto* fill_bottom = find_item(root.get(), QStringLiteral("chrome_frame_shell_frame_fill_bottom"));
+        auto* fill_left = find_item(root.get(), QStringLiteral("chrome_frame_shell_frame_fill_left"));
+        auto* fill_right = find_item(root.get(), QStringLiteral("chrome_frame_shell_frame_fill_right"));
+        QVERIFY(fill_top    != nullptr);
+        QVERIFY(fill_bottom != nullptr);
+        QVERIFY(fill_left   != nullptr);
+        QVERIFY(fill_right  != nullptr);
+        QVERIFY(rect_nearly_equal(item_rect(*fill_top),    QRectF(0.0,   0.0, 200.0, 35.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*fill_bottom), QRectF(0.0, 110.0, 200.0, 10.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*fill_left),   QRectF(0.0,  35.0,  10.0, 75.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*fill_right),  QRectF(190.0, 35.0,  10.0, 75.0)));
+        QCOMPARE(object_color(fill_left, "color"), QColor(QStringLiteral("#102030")));
+
+        auto* outer_top = find_item(root.get(), QStringLiteral("chrome_window_frame_top"));
+        auto* outer_bottom = find_item(root.get(), QStringLiteral("chrome_window_frame_bottom"));
+        auto* outer_left = find_item(root.get(), QStringLiteral("chrome_window_frame_left"));
+        auto* outer_right = find_item(root.get(), QStringLiteral("chrome_window_frame_right"));
+        QVERIFY(outer_top    != nullptr);
+        QVERIFY(outer_bottom != nullptr);
+        QVERIFY(outer_left   != nullptr);
+        QVERIFY(outer_right  != nullptr);
+
+        QVERIFY(!outer_top->isVisible());
+        QVERIFY(outer_bottom->isVisible());
+        QVERIFY(outer_left->isVisible());
+        QVERIFY(outer_right->isVisible());
+        QVERIFY(rect_nearly_equal(item_rect(*outer_bottom), QRectF(0.0, 118.0, 200.0, 2.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*outer_left),   QRectF(0.0,   0.0,   2.0, 120.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*outer_right),  QRectF(198.0, 0.0,   2.0, 120.0)));
+        QCOMPARE(object_color(outer_left, "color"), QColor(QStringLiteral("#203040")));
+
+        auto* titlebar_top = find_item(root.get(), QStringLiteral("titlebar_window_frame_top"));
+        QVERIFY(titlebar_top != nullptr);
+        QVERIFY(titlebar_top->isVisible());
+        QCOMPARE(titlebar_top->z(), 0.0);
+        QVERIFY(rect_nearly_equal(item_rect(*titlebar_top), QRectF(0.0, 0.0, 200.0, 2.0)));
+        QCOMPARE(object_color(titlebar_top, "color"), QColor(QStringLiteral("#203040")));
+
+        auto* mark = find_item(root.get(), QStringLiteral("vnm_animated_mark"));
+        QVERIFY(mark != nullptr);
+        QVERIFY(mark->parentItem() != nullptr);
+        QVERIFY(mark->parentItem()->z() > titlebar_top->z());
+
+        auto* inner_top = find_item(root.get(), QStringLiteral("chrome_frame_shell_inner_edge_top"));
+        auto* inner_bottom = find_item(root.get(), QStringLiteral("chrome_frame_shell_inner_edge_bottom"));
+        auto* inner_left = find_item(root.get(), QStringLiteral("chrome_frame_shell_inner_edge_left"));
+        auto* inner_right = find_item(root.get(), QStringLiteral("chrome_frame_shell_inner_edge_right"));
+        QVERIFY(inner_top    != nullptr);
+        QVERIFY(inner_bottom != nullptr);
+        QVERIFY(inner_left   != nullptr);
+        QVERIFY(inner_right  != nullptr);
+
+        QVERIFY(rect_nearly_equal(item_rect(*inner_top),    QRectF(7.0,   32.0, 186.0, 3.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*inner_bottom), QRectF(7.0,  110.0, 186.0, 3.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*inner_left),   QRectF(7.0,   32.0,   3.0, 81.0)));
+        QVERIFY(rect_nearly_equal(item_rect(*inner_right),  QRectF(190.0, 32.0,   3.0, 81.0)));
+        QCOMPARE(object_color(inner_left, "color"), QColor(QStringLiteral("#405060")));
+
+        QVERIFY(nearly_equal(inner_left->x() - outer_left->width(), 5.0));
+        QVERIFY(nearly_equal(outer_right->x() - (inner_right->x() + inner_right->width()), 5.0));
+        QVERIFY(nearly_equal(outer_bottom->y() - (inner_bottom->y() + inner_bottom->height()), 5.0));
+        QVERIFY(rect_nearly_equal(
+            shell->property("content_interior_rect").toRectF(),
+            QRectF(10.0, 35.0, 180.0, 75.0)));
+
+        auto* left_resize_area = find_item(root.get(), QStringLiteral("left_resize_area"));
+        auto* top_left_resize_area = find_item(root.get(), QStringLiteral("top_left_resize_area"));
+        QVERIFY(left_resize_area     != nullptr);
+        QVERIFY(top_left_resize_area != nullptr);
+        QVERIFY(nearly_equal(left_resize_area->width(), 11.0));
+        QVERIFY(nearly_equal(top_left_resize_area->width(), 11.0));
+    }
+
+    void frame_shell_preserves_dpr_125_scalar_geometry_examples()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 200
+    height: 120
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        titlebar_height: 32
+        device_pixel_ratio: 1.25
+        frame_gap: 4
+        frame_outer_edge: 0.8
+        frame_inner_edge: 0.8
+        edge_resize_extent: 4.8
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/frame_shell_dpr_125_contract.qml");
+        QVERIFY(root != nullptr);
+
+        auto* shell = find_item(root.get(), QStringLiteral("frame_shell"));
+        auto* inner_left = find_item(root.get(), QStringLiteral("chrome_frame_shell_inner_edge_left"));
+        auto* titlebar_top = find_item(root.get(), QStringLiteral("titlebar_window_frame_top"));
+        auto* outer_left = find_item(root.get(), QStringLiteral("chrome_window_frame_left"));
+        QVERIFY(shell        != nullptr);
+        QVERIFY(inner_left   != nullptr);
+        QVERIFY(titlebar_top != nullptr);
+        QVERIFY(outer_left   != nullptr);
+
+        struct shell_scalar_case_t {
+            qreal outer_edge;
+            qreal inner_edge;
+            qreal expected_inner_x;
+            qreal expected_content_x;
+            bool  outer_visible;
+            bool  inner_visible;
+        };
+
+        const shell_scalar_case_t cases[] = {
+            {0.8, 0.8, 4.8, 5.6, true,  true },
+            {0.0, 0.8, 4.0, 4.8, false, true },
+            {0.8, 0.0, 4.8, 4.8, true,  false},
+            {0.0, 0.0, 4.0, 4.0, false, false},
+        };
+
+        for (const shell_scalar_case_t& c : cases) {
+            QVERIFY(shell->setProperty("frame_outer_edge", c.outer_edge));
+            QVERIFY(shell->setProperty("frame_inner_edge", c.inner_edge));
+            shell->ensurePolished();
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+            QVERIFY(nearly_equal(inner_left->x(), c.expected_inner_x));
+            QVERIFY(nearly_equal(
+                shell->property("content_interior_x").toReal(),
+                c.expected_content_x));
+            QCOMPARE(titlebar_top->isVisible(), c.outer_visible);
+            QCOMPARE(outer_left->isVisible(), c.outer_visible);
+            QCOMPARE(inner_left->isVisible(), c.inner_visible);
+
+            const qreal expected_inner_width = c.inner_visible ? 0.8 : 0.0;
+            QVERIFY(nearly_equal(inner_left->width(), expected_inner_width));
+            QVERIFY(vnm_qml_chrome::rect_has_snapped_physical_edges(
+                shell->property("content_interior_rect").toRectF(),
+                1.25));
+        }
+
+        QVERIFY(nearly_equal(shell->property("content_interior_y").toReal(), 32.0));
+        QVERIFY(shell->setProperty("frame_inner_edge", 0.8));
+        shell->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        QVERIFY(nearly_equal(shell->property("content_interior_y").toReal(), 32.8));
+    }
+
+    void frame_shell_snaps_right_and_bottom_inner_edges_from_primitives()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 200
+    height: 120
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        titlebar_height: 32
+        device_pixel_ratio: 1.25
+        frame_outer_edge: 1
+        frame_gap: 4
+        frame_inner_edge: 1.04
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine,
+            qml_source,
+            "qrc:/tests/frame_shell_far_edge_snapping_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* shell = find_item(root.get(), QStringLiteral("frame_shell"));
+        auto* outer_left = find_item(
+            root.get(),
+            QStringLiteral("chrome_window_frame_left"));
+        auto* outer_bottom = find_item(
+            root.get(),
+            QStringLiteral("chrome_window_frame_bottom"));
+        auto* titlebar_top = find_item(
+            root.get(),
+            QStringLiteral("titlebar_window_frame_top"));
+        auto* inner_bottom = find_item(
+            root.get(),
+            QStringLiteral("chrome_frame_shell_inner_edge_bottom"));
+        auto* inner_right = find_item(
+            root.get(),
+            QStringLiteral("chrome_frame_shell_inner_edge_right"));
+        QVERIFY(shell         != nullptr);
+        QVERIFY(outer_left    != nullptr);
+        QVERIFY(outer_bottom  != nullptr);
+        QVERIFY(titlebar_top  != nullptr);
+        QVERIFY(inner_bottom  != nullptr);
+        QVERIFY(inner_right   != nullptr);
+
+        QVERIFY(rect_nearly_equal(
+            item_rect(*outer_left),
+            QRectF(0.0, 0.0, 0.8, 120.0)));
+        QVERIFY(rect_nearly_equal(
+            item_rect(*outer_bottom),
+            QRectF(0.0, 119.0, 200.0, 1.0)));
+        QVERIFY(rect_nearly_equal(
+            item_rect(*titlebar_top),
+            QRectF(0.0, 0.0, 200.0, 0.8)));
+        QVERIFY(rect_nearly_equal(
+            item_rect(*inner_bottom),
+            QRectF(4.8, 113.6, 190.4, 1.6)));
+        QVERIFY(rect_nearly_equal(
+            item_rect(*inner_right),
+            QRectF(193.6, 32.0, 1.6, 83.2)));
+        QVERIFY(nearly_equal(shell->property("content_interior_x").toReal(), 6.4));
+        QVERIFY(nearly_equal(shell->property("content_interior_width").toReal(), 187.2));
+        QVERIFY(vnm_qml_chrome::rect_has_snapped_physical_edges(
+            shell->property("content_interior_rect").toRectF(),
+            1.25));
+    }
+
+    void frame_shell_forwards_titlebar_properties_and_window_command_signals()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 500
+    height: 140
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        title: "Shell Commands"
+        active: false
+        maximized: true
+        activity_marker_text: "!"
+        minimize_button_visible: false
+        maximize_button_visible: false
+        close_button_visible: true
+        leading_action_component: Component {
+            Item {
+                objectName: "shell_leading_action"
+                width: 10
+                height: 10
+            }
+        }
+        trailing_action_component: Component {
+            Item {
+                objectName: "shell_trailing_action"
+                width: 12
+                height: 10
+            }
+        }
+        custom_buttons: [{
+            object_name: "shell_custom_button",
+            glyph: "S",
+            width: 38
+        }]
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/frame_shell_titlebar_forwarding_contract.qml");
+        QVERIFY(root != nullptr);
+        auto* root_item = qobject_cast<QQuickItem*>(root.get());
+        QVERIFY(root_item != nullptr);
+        root_item->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QObject* shell = find_descendant(root.get(), QStringLiteral("frame_shell"));
+        QObject* titlebar = find_descendant(
+            root.get(),
+            QStringLiteral("chrome_frame_shell_titlebar"));
+        QVERIFY(shell    != nullptr);
+        QVERIFY(titlebar != nullptr);
+
+        QCOMPARE(titlebar->property("title").toString(), QStringLiteral("Shell Commands"));
+        QCOMPARE(titlebar->property("active").toBool(), false);
+        QCOMPARE(titlebar->property("maximized").toBool(), true);
+        QCOMPARE(titlebar->property("activity_marker_text").toString(), QStringLiteral("!"));
+        QVERIFY(shell->setProperty("title", QStringLiteral("Updated Shell")));
+        QCOMPARE(titlebar->property("title").toString(), QStringLiteral("Updated Shell"));
+
+        QVERIFY(find_item(root.get(), QStringLiteral("shell_leading_action")) != nullptr);
+        QVERIFY(find_item(root.get(), QStringLiteral("shell_trailing_action")) != nullptr);
+        auto* custom_button = find_item(root.get(), QStringLiteral("shell_custom_button"));
+        auto* minimize_button = find_item(root.get(), QStringLiteral("minimize_button"));
+        auto* maximize_button = find_item(root.get(), QStringLiteral("maximize_button"));
+        auto* close_button = find_item(root.get(), QStringLiteral("close_button"));
+        QVERIFY(custom_button   != nullptr);
+        QVERIFY(minimize_button != nullptr);
+        QVERIFY(maximize_button != nullptr);
+        QVERIFY(close_button    != nullptr);
+        QVERIFY(custom_button->isVisible());
+        QVERIFY(!minimize_button->isVisible());
+        QVERIFY(!maximize_button->isVisible());
+        QVERIFY(close_button->isVisible());
+
+        QSignalSpy move_spy(shell, SIGNAL(move_requested()));
+        QSignalSpy resize_spy(shell, SIGNAL(resize_requested(int)));
+        QSignalSpy minimize_spy(shell, SIGNAL(minimize_requested()));
+        QSignalSpy maximize_spy(shell, SIGNAL(maximize_toggle_requested()));
+        QSignalSpy close_spy(shell, SIGNAL(close_requested()));
+        QVERIFY(move_spy.isValid());
+        QVERIFY(resize_spy.isValid());
+        QVERIFY(minimize_spy.isValid());
+        QVERIFY(maximize_spy.isValid());
+        QVERIFY(close_spy.isValid());
+
+        QVERIFY(QMetaObject::invokeMethod(titlebar, "move_requested"));
+        QVERIFY(QMetaObject::invokeMethod(
+            titlebar,
+            "resize_requested",
+            Q_ARG(int, int(Qt::RightEdge))));
+        QVERIFY(QMetaObject::invokeMethod(titlebar, "minimize_requested"));
+        QVERIFY(QMetaObject::invokeMethod(titlebar, "maximize_toggle_requested"));
+        QVERIFY(QMetaObject::invokeMethod(titlebar, "close_requested"));
+
+        QCOMPARE(move_spy.count(), 1);
+        QCOMPARE(resize_spy.count(), 1);
+        QCOMPARE(resize_spy.takeFirst().at(0).toInt(), int(Qt::RightEdge));
+        QCOMPARE(minimize_spy.count(), 1);
+        QCOMPARE(maximize_spy.count(), 1);
+        QCOMPARE(close_spy.count(), 1);
+    }
+
+    void frame_shell_forwards_edge_resize_requests_and_disable_state()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 240
+    height: 120
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        titlebar_height: 32
+        edge_resize_extent: 8
+        resize_enabled: true
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine,
+            qml_source,
+            "qrc:/tests/frame_shell_resize_forwarding_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        QObject* shell = find_descendant(root.get(), QStringLiteral("frame_shell"));
+        QVERIFY(shell != nullptr);
+        QSignalSpy resize_spy(shell, SIGNAL(resize_requested(int)));
+        QVERIFY(resize_spy.isValid());
+
+        struct resize_area_case_t {
+            const char* object_name;
+            int         edges;
+        };
+
+        const resize_area_case_t cases[] = {
+            {"left_resize_area",         int(Qt::LeftEdge) },
+            {"right_resize_area",        int(Qt::RightEdge)},
+            {"bottom_resize_area",       int(Qt::BottomEdge)},
+            {"bottom_left_resize_area",  int(Qt::LeftEdge  | Qt::BottomEdge)},
+            {"bottom_right_resize_area", int(Qt::RightEdge | Qt::BottomEdge)},
+            {"top_left_resize_area",     int(Qt::LeftEdge  | Qt::TopEdge)},
+            {"top_right_resize_area",    int(Qt::RightEdge | Qt::TopEdge)},
+        };
+
+        for (const resize_area_case_t& c : cases) {
+            QObject* area = find_descendant(root.get(), QString::fromLatin1(c.object_name));
+            QVERIFY2(area != nullptr, c.object_name);
+            QVERIFY2(area->property("enabled").toBool(), c.object_name);
+            QVERIFY(QMetaObject::invokeMethod(
+                area,
+                "resize_requested",
+                Q_ARG(int, c.edges)));
+            QCOMPARE(resize_spy.count(), 1);
+            QCOMPARE(resize_spy.takeFirst().at(0).toInt(), c.edges);
+        }
+
+        QVERIFY(shell->setProperty("resize_enabled", false));
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        for (const resize_area_case_t& c : cases) {
+            QObject* area = find_descendant(root.get(), QString::fromLatin1(c.object_name));
+            QVERIFY2(area != nullptr, c.object_name);
+            QVERIFY2(!area->property("enabled").toBool(), c.object_name);
+        }
+    }
+
+    void frame_shell_places_non_terminal_content_inside_content_interior()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 200
+    height: 120
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        titlebar_height: 30
+        device_pixel_ratio: 1
+        frame_outer_edge: 2
+        frame_gap: 4
+        frame_inner_edge: 1
+
+        Rectangle {
+            objectName: "payload"
+            anchors.fill: parent
+            color: "#506070"
+        }
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine, qml_source, "qrc:/tests/frame_shell_content_slot_contract.qml");
+        QVERIFY(root != nullptr);
+        auto* root_item = qobject_cast<QQuickItem*>(root.get());
+        QVERIFY(root_item != nullptr);
+        root_item->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* shell = find_item(root.get(), QStringLiteral("frame_shell"));
+        auto* content = find_item(root.get(), QStringLiteral("chrome_frame_shell_content"));
+        auto* payload = find_item(root.get(), QStringLiteral("payload"));
+        QVERIFY(shell   != nullptr);
+        QVERIFY(content != nullptr);
+        QVERIFY(payload != nullptr);
+        QCOMPARE(payload->parentItem(), content);
+
+        const QRectF expected_content_rect(7.0, 31.0, 186.0, 82.0);
+        QVERIFY(rect_nearly_equal(item_rect(*content), expected_content_rect));
+        QVERIFY(rect_nearly_equal(
+            shell->property("content_interior_rect").toRectF(),
+            expected_content_rect));
+        QVERIFY(rect_nearly_equal(item_rect(*payload), QRectF(0.0, 0.0, 186.0, 82.0)));
+
+        const QPointF payload_origin = payload->mapToItem(shell, QPointF(0.0, 0.0));
+        QVERIFY(nearly_equal(payload_origin.x(), expected_content_rect.x()));
+        QVERIFY(nearly_equal(payload_origin.y(), expected_content_rect.y()));
+    }
+
     void window_frame_overlays_edges_without_reserving_space()
     {
         QQmlEngine engine;
@@ -687,6 +1317,313 @@ Item {
         QVERIFY(rect_nearly_equal(item_rect(*left),   QRectF(0.0,   0.0,   3.0, 80.0)));
         QVERIFY(rect_nearly_equal(item_rect(*right),  QRectF(117.0, 0.0,   3.0, 80.0)));
         QCOMPARE(object_color(bottom, "color"), QColor(QStringLiteral("#445566")));
+    }
+
+    void frame_shell_snaps_outer_right_and_bottom_edges_from_primitives()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    width: 201
+    height: 121
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        titlebar_height: 32
+        frame_outer_edge: 1
+        frame_gap: 4
+        frame_inner_edge: 1
+        device_pixel_ratio: 1.25
+    }
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine,
+            qml_source,
+            "qrc:/tests/frame_shell_outer_far_edge_snapping_contract.qml");
+        QVERIFY(root != nullptr);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+        auto* top = find_item(root.get(), QStringLiteral("chrome_window_frame_top"));
+        auto* bottom = find_item(root.get(), QStringLiteral("chrome_window_frame_bottom"));
+        auto* left = find_item(root.get(), QStringLiteral("chrome_window_frame_left"));
+        auto* right = find_item(root.get(), QStringLiteral("chrome_window_frame_right"));
+        QVERIFY(top    != nullptr);
+        QVERIFY(bottom != nullptr);
+        QVERIFY(left   != nullptr);
+        QVERIFY(right  != nullptr);
+
+        QVERIFY(!top->isVisible());
+        QVERIFY(rect_nearly_equal(item_rect(*top),    QRectF(0.0,   0.0, 200.8,   0.8)));
+        QVERIFY(rect_nearly_equal(item_rect(*bottom), QRectF(0.0, 120.0, 200.8,   0.8)));
+        QVERIFY(rect_nearly_equal(item_rect(*left),   QRectF(0.0,   0.0,   0.8, 120.8)));
+        QVERIFY(rect_nearly_equal(item_rect(*right),  QRectF(200.0, 0.0,   0.8, 120.8)));
+        QVERIFY(vnm_qml_chrome::rect_has_snapped_physical_edges(item_rect(*bottom), 1.25));
+        QVERIFY(vnm_qml_chrome::rect_has_snapped_physical_edges(item_rect(*right),  1.25));
+    }
+
+    void frame_shell_uses_render_target_physical_extent_for_far_edges()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    id: root
+
+    width: 1
+    height: 1
+
+    VNM_ChromeFrameShell {
+        objectName: "frame_shell"
+        anchors.fill: parent
+        titlebar_height: 32
+        frame_outer_edge: 1
+        frame_gap: 3
+        frame_inner_edge: 1
+        device_pixel_ratio: 1.25
+        render_target_physical_width: root.render_target_physical_width
+        render_target_physical_height: root.render_target_physical_height
+    }
+
+    property real render_target_physical_width: 0
+    property real render_target_physical_height: 0
+}
+)";
+
+        std::unique_ptr<QObject> root = create_qml_object(
+            engine,
+            qml_source,
+            "qrc:/tests/frame_shell_render_target_extent_contract.qml");
+        QVERIFY(root != nullptr);
+
+        auto* outer_bottom = find_item(root.get(), QStringLiteral("chrome_window_frame_bottom"));
+        auto* outer_right = find_item(root.get(), QStringLiteral("chrome_window_frame_right"));
+        auto* inner_bottom = find_item(root.get(), QStringLiteral("chrome_frame_shell_inner_edge_bottom"));
+        auto* inner_right = find_item(root.get(), QStringLiteral("chrome_frame_shell_inner_edge_right"));
+        QVERIFY(outer_bottom != nullptr);
+        QVERIFY(outer_right  != nullptr);
+        QVERIFY(inner_bottom != nullptr);
+        QVERIFY(inner_right  != nullptr);
+
+        struct extent_case_t {
+            qreal  width;
+            qreal  height;
+            qreal  physical_width;
+            qreal  physical_height;
+            QRectF expected_outer_bottom;
+            QRectF expected_outer_right;
+            QRectF expected_inner_bottom;
+            QRectF expected_inner_right;
+        };
+
+        const extent_case_t cases[] = {
+            {
+                450.0,
+                282.0,
+                562.0,
+                352.0,
+                QRectF(0.0, 280.8, 449.6, 0.8),
+                QRectF(448.8, 0.0, 0.8, 281.6),
+                QRectF(4.0, 276.8, 441.6, 0.8),
+                QRectF(444.8, 32.0, 0.8, 245.6),
+            },
+            {
+                566.0,
+                406.0,
+                707.0,
+                507.0,
+                QRectF(0.0, 404.8, 565.6, 0.8),
+                QRectF(564.8, 0.0, 0.8, 405.6),
+                QRectF(4.0, 400.8, 557.6, 0.8),
+                QRectF(560.8, 32.0, 0.8, 369.6),
+            },
+            {
+                610.0,
+                310.0,
+                763.0,
+                388.0,
+                QRectF(0.0, 309.6, 610.4, 0.8),
+                QRectF(609.6, 0.0, 0.8, 310.4),
+                QRectF(4.0, 305.6, 602.4, 0.8),
+                QRectF(605.6, 32.0, 0.8, 274.4),
+            },
+            {
+                618.0,
+                346.0,
+                772.0,
+                432.0,
+                QRectF(0.0, 344.8, 617.6, 0.8),
+                QRectF(616.8, 0.0, 0.8, 345.6),
+                QRectF(4.0, 340.8, 609.6, 0.8),
+                QRectF(612.8, 32.0, 0.8, 309.6),
+            },
+        };
+
+        for (const extent_case_t& c : cases) {
+            auto* root_item = qobject_cast<QQuickItem*>(root.get());
+            QVERIFY(root_item != nullptr);
+            root_item->setSize(QSizeF(c.width, c.height));
+            QVERIFY(root->setProperty("render_target_physical_width", c.physical_width));
+            QVERIFY(root->setProperty("render_target_physical_height", c.physical_height));
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+            QVERIFY(rect_nearly_equal(item_rect(*outer_bottom), c.expected_outer_bottom));
+            QVERIFY(rect_nearly_equal(item_rect(*outer_right),  c.expected_outer_right));
+            QVERIFY(rect_nearly_equal(item_rect(*inner_bottom), c.expected_inner_bottom));
+            QVERIFY(rect_nearly_equal(item_rect(*inner_right),  c.expected_inner_right));
+        }
+    }
+
+    void frame_shell_terminal_chrome_renders_outer_edge_pixels()
+    {
+        QQmlEngine engine;
+        QVERIFY(vnm_init_qml_chrome_runtime(engine));
+
+        static const char qml_source[] = R"(
+import QtQuick
+import VNM_Chrome
+
+Item {
+    id: root
+
+    property real test_device_pixel_ratio: 1
+    readonly property real frame_edge:
+        1 / VNM_chrome_geometry.normalized_device_pixel_ratio(test_device_pixel_ratio)
+    readonly property real reduced_resize_border:
+        Math.max(
+            0,
+            VNM_chrome_geometry.snapped_logical_edge(6, test_device_pixel_ratio)
+                - 2 / VNM_chrome_geometry.normalized_device_pixel_ratio(test_device_pixel_ratio))
+    readonly property real reduced_titlebar_height:
+        Math.max(
+            0,
+            VNM_chrome_geometry.snapped_logical_edge(32, test_device_pixel_ratio)
+                - 2 / VNM_chrome_geometry.normalized_device_pixel_ratio(test_device_pixel_ratio))
+
+    VNM_ChromeTheme {
+        id: terminal_theme
+
+        titlebar: "#12171e"
+        titlebar_text: "#ebeff5"
+        titlebar_button_icon: "#e2e8f0"
+        titlebar_button_hover: "#272f3a"
+        titlebar_button_pressed: "#343d4a"
+        titlebar_close_hover: "#c6303a"
+        titlebar_close_pressed: "#96222a"
+        titlebar_activity_marker: "#71b4ff"
+        titlebar_content_border: "transparent"
+        window_frame_border: "#2a313c"
+    }
+
+    VNM_ChromeFrameShell {
+        objectName: "terminal_like_frame_shell"
+        anchors.fill: parent
+        theme: terminal_theme
+        frame_color: "#12171e"
+        frame_outer_edge: root.frame_edge
+        frame_outer_edge_color: "#2a313c"
+        frame_gap: Math.max(0, root.reduced_resize_border - root.frame_edge)
+        frame_inner_edge: root.frame_edge
+        frame_inner_edge_color: "#2a313c"
+        edge_resize_extent: root.reduced_resize_border
+        device_pixel_ratio: root.test_device_pixel_ratio
+        titlebar_height: Math.min(root.reduced_titlebar_height, root.height)
+        active: true
+        resize_enabled: true
+    }
+}
+)";
+
+        struct render_case_t {
+            int   width;
+            int   height;
+            qreal device_pixel_ratio;
+        };
+
+        const render_case_t cases[] = {
+            {201, 121, 1.0 },
+            {492, 418, 1.0 },
+            {493, 419, 1.25},
+            {554, 488, 1.25},
+        };
+
+        const QColor expected_edge_color(QStringLiteral("#2a313c"));
+        for (const render_case_t& c : cases) {
+            QQuickWindow window;
+            window.setColor(QColor(QStringLiteral("#000000")));
+            window.resize(c.width, c.height);
+
+            std::unique_ptr<QObject> root_object = create_qml_object(
+                engine,
+                qml_source,
+                "qrc:/tests/frame_shell_terminal_chrome_pixel_contract.qml");
+            QVERIFY(root_object != nullptr);
+
+            auto* root_item = qobject_cast<QQuickItem*>(root_object.get());
+            QVERIFY(root_item != nullptr);
+            root_item->setParentItem(window.contentItem());
+            root_item->setSize(QSizeF(c.width, c.height));
+            QVERIFY(root_item->setProperty("test_device_pixel_ratio", c.device_pixel_ratio));
+
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            QTest::qWait(50);
+
+            QImage image = window.grabWindow();
+            QVERIFY(!image.isNull());
+            QVERIFY(image.width() > 0);
+            QVERIFY(image.height() > 0);
+
+            const int right_x  = image.width() - 1;
+            const int bottom_y = image.height() - 1;
+            for (int y = 0; y < image.height(); ++y) {
+                const QColor actual = image.pixelColor(right_x, y);
+                const QByteArray message = QStringLiteral(
+                    "right outer edge pixel mismatch at size %1x%2 dpr %3: "
+                    "x=%4 y=%5 actual=%6 expected=%7")
+                    .arg(c.width)
+                    .arg(c.height)
+                    .arg(c.device_pixel_ratio)
+                    .arg(right_x)
+                    .arg(y)
+                    .arg(actual.name(QColor::HexArgb))
+                    .arg(expected_edge_color.name(QColor::HexArgb))
+                    .toUtf8();
+                QVERIFY2(
+                    color_nearly_equal(actual, expected_edge_color),
+                    message.constData());
+            }
+
+            for (int x = 0; x < image.width(); ++x) {
+                const QColor actual = image.pixelColor(x, bottom_y);
+                const QByteArray message = QStringLiteral(
+                    "bottom outer edge pixel mismatch at size %1x%2 dpr %3: "
+                    "x=%4 y=%5 actual=%6 expected=%7")
+                    .arg(c.width)
+                    .arg(c.height)
+                    .arg(c.device_pixel_ratio)
+                    .arg(x)
+                    .arg(bottom_y)
+                    .arg(actual.name(QColor::HexArgb))
+                    .arg(expected_edge_color.name(QColor::HexArgb))
+                    .toUtf8();
+                QVERIFY2(
+                    color_nearly_equal(actual, expected_edge_color),
+                    message.constData());
+            }
+        }
     }
 
     void titlebar_window_frame_top_edge_is_opt_in_and_below_content()

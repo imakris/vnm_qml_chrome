@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QSize>
 
 class QWindow;
 
@@ -23,6 +24,10 @@ public:
 
     Q_INVOKABLE bool start_system_move(QWindow* window) const;
     Q_INVOKABLE bool start_system_resize(QWindow* window, int edges) const;
+    Q_INVOKABLE QSize native_window_physical_size(
+        QWindow* window,
+        qreal    logical_width,
+        qreal    logical_height) const;
 };
 
 } // namespace vnm_qml_chrome

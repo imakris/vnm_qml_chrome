@@ -12,5 +12,6 @@
     <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeSideResizeLayer.qml">qml/VNM_ChromeSideResizeLayer.qml</file>
     <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeWindowFrame.qml">qml/VNM_ChromeWindowFrame.qml</file>
     <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeTitleBar.qml">qml/VNM_ChromeTitleBar.qml</file>
+    <file alias="vnm_qml_chrome/qml/VNM_Chrome/VNM_ChromeFrameShell.qml">qml/VNM_ChromeFrameShell.qml</file>
   </qresource>
 </RCC>
