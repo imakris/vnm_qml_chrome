@@ -3,12 +3,12 @@
 #include <QSize>
 #include <QWindow>
 
-#include <cmath>
-
 #ifdef Q_OS_WIN
 #include <dwmapi.h>
 #include <windows.h>
 #endif
+
+#include <cmath>
 
 namespace {
 
