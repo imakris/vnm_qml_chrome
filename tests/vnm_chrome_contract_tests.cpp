@@ -2098,7 +2098,7 @@ Item {
             "Custom button sits flush against the window controls.");
 
         QCOMPARE(root->property("activations").toInt(), 0);
-        QVERIFY(QMetaObject::invokeMethod(probe, "click"));
+        QVERIFY(QMetaObject::invokeMethod(probe, "clicked"));
         QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
         QCOMPARE(root->property("activations").toInt(), 1);
     }
